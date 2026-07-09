@@ -63,8 +63,8 @@ The API only accepts `zh` for Chinese (typically Simplified captions). When Chin
 
 ## Usage tips
 
-- **Microphone**: speak into your mic; hear the translation and watch captions.
-- **Browser tab**: share a tab with audio enabled. Prefer Chrome. When supported, local tab playback is suppressed so you do not hear original + translation at once; use the **Original** slider if you want some source audio mixed in.
+- **Microphone / virtual input**: choose any audio input device the browser exposes, including virtual mics such as BlackHole or Loopback. Route another app’s output into that virtual device in your OS, then select it here. Enable **Audio volume** in Source transcript to monitor the captured input (keep volume low with a real mic to avoid feedback).
+- **Browser tab**: share a tab with audio enabled. Prefer Chrome. When supported, local tab playback is suppressed so you do not hear original + translation at once; enable **Audio volume** in Source transcript if you want some source audio mixed in.
 - Changing the target language requires stopping and starting a new session (one session per output language).
 - Source transcripts use `gpt-realtime-whisper` when configured on the session.
 - For Chinese, toggle caption script anytime; Traditional is the default.
@@ -79,6 +79,7 @@ Realtime Translation is billed by **audio duration** (not text tokens). Check cu
 - `app/api/debug/events/route.ts` — prints forwarded realtime model events to the server console
 - `lib/languages.ts` — supported output language codes
 - `lib/chinese-script.ts` — Simplified ↔ Traditional caption conversion (OpenCC)
+- `lib/audio-devices.ts` — enumerate microphone / virtual input devices
 - `lib/translation-session.ts` — WebRTC capture, SDP negotiation, event handling
 - `components/TranslatorApp.tsx` — UI
 

@@ -24,6 +24,8 @@ export type TranslationSessionCallbacks = {
 export type TranslationSessionOptions = {
   targetLanguage: OutputLanguageCode;
   source: AudioSource;
+  /** Microphone / virtual input device id from enumerateDevices. */
+  audioDeviceId?: string;
   audioElement: HTMLAudioElement;
   callbacks?: TranslationSessionCallbacks;
   /** Optional id used when forwarding debug logs to the server. */
@@ -41,6 +43,9 @@ export class TranslationSession {
   private dataChannel: RTCDataChannel | null = null;
   private captureStream: MediaStream | null = null;
   private sourceAudio: HTMLAudioElement | null = null;
+  private sourceVolume = 0;
+  private translatedVolume = 1;
+  private translatedMuted = false;
   private stopped = false;
   private readonly debugSessionId: string;
 
@@ -55,6 +60,7 @@ export class TranslationSession {
     this.logServer("lifecycle", {
       type: "client.session.starting",
       source: this.options.source,
+      audioDeviceId: this.options.audioDeviceId ?? "default",
       targetLanguage: this.options.targetLanguage,
     });
     callbacks?.onStatus?.("connecting", "Requesting audio access…");
@@ -62,15 +68,18 @@ export class TranslationSession {
     try {
       this.captureStream = await this.captureAudio();
       this.wireCaptureEnded();
+      const trackLabel =
+        this.captureStream.getAudioTracks()[0]?.label ?? "unknown";
       this.logServer("lifecycle", {
         type: "client.audio.captured",
         source: this.options.source,
+        audioDeviceId: this.options.audioDeviceId ?? "default",
+        trackLabel,
         audioTracks: this.captureStream.getAudioTracks().length,
       });
 
-      if (this.options.source === "tab") {
-        this.startLocalSourcePlayback(this.captureStream);
-      }
+      // Local monitor for tab audio and mic/virtual inputs (volume starts at 0).
+      this.startLocalSourcePlayback(this.captureStream);
 
       callbacks?.onStatus?.("connecting", "Creating translation session…");
       const session = await this.createSession();
@@ -109,17 +118,18 @@ export class TranslationSession {
   }
 
   setTranslatedVolume(volume: number): void {
-    this.options.audioElement.volume = clamp(volume, 0, 1);
+    this.translatedVolume = clamp(volume, 0, 1);
+    this.applyTranslatedPlayback();
   }
 
   setTranslatedMuted(muted: boolean): void {
-    this.options.audioElement.muted = muted;
+    this.translatedMuted = muted;
+    this.applyTranslatedPlayback();
   }
 
   setSourceVolume(volume: number): void {
-    if (this.sourceAudio) {
-      this.sourceAudio.volume = clamp(volume, 0, 1);
-    }
+    this.sourceVolume = clamp(volume, 0, 1);
+    this.applySourcePlayback();
   }
 
   private async createSession(): Promise<SessionResponse> {
@@ -141,12 +151,30 @@ export class TranslationSession {
 
   private async captureAudio(): Promise<MediaStream> {
     if (this.options.source === "microphone") {
+      const deviceId = this.options.audioDeviceId?.trim();
+      const useSpecificDevice =
+        !!deviceId && deviceId !== "default" && deviceId !== "communications";
+
+      // Virtual loopback devices usually sound worse with processing on.
+      const processing = useSpecificDevice
+        ? {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          }
+        : {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          };
+
       return navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: useSpecificDevice
+          ? {
+              deviceId: { exact: deviceId },
+              ...processing,
+            }
+          : processing,
       });
     }
 
@@ -202,11 +230,33 @@ export class TranslationSession {
     );
   }
 
+  private applyTranslatedPlayback(): void {
+    const audio = this.options.audioElement;
+    const silent = this.translatedMuted || this.translatedVolume <= 0;
+    audio.muted = silent;
+    audio.volume = silent ? 0 : this.translatedVolume;
+
+    // Hard-disable remote tracks so WebRTC cannot leak audible samples.
+    const remote = audio.srcObject;
+    if (remote instanceof MediaStream) {
+      for (const track of remote.getAudioTracks()) {
+        track.enabled = !silent;
+      }
+    }
+  }
+
+  private applySourcePlayback(): void {
+    if (!this.sourceAudio) return;
+    const silent = this.sourceVolume <= 0;
+    this.sourceAudio.muted = silent;
+    this.sourceAudio.volume = silent ? 0 : this.sourceVolume;
+  }
+
   private startLocalSourcePlayback(stream: MediaStream): void {
     this.sourceAudio = new Audio();
     this.sourceAudio.autoplay = true;
     this.sourceAudio.srcObject = stream;
-    this.sourceAudio.volume = 0;
+    this.applySourcePlayback();
     void this.sourceAudio.play().catch(() => {
       // Autoplay may be blocked; translated track still works via user gesture.
     });
@@ -246,6 +296,7 @@ export class TranslationSession {
 
     const audio = this.options.audioElement;
     audio.autoplay = true;
+    this.applyTranslatedPlayback();
     pc.ontrack = ({ streams, track }) => {
       this.logServer("webrtc", {
         type: "client.webrtc.remote_track",
@@ -253,6 +304,7 @@ export class TranslationSession {
         id: track.id,
       });
       audio.srcObject = streams[0];
+      this.applyTranslatedPlayback();
       void audio.play().catch((error) => {
         this.options.callbacks?.onError?.(
           error instanceof Error ? error.message : String(error),

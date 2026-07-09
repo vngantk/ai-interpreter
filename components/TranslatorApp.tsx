@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ensureMicrophonePermission,
+  formatAudioInputLabel,
+  listAudioInputDevices,
+  type AudioInputDevice,
+} from "@/lib/audio-devices";
 import {
   CHINESE_SCRIPTS,
   DEFAULT_CHINESE_SCRIPT,
@@ -33,14 +39,17 @@ export default function TranslatorApp() {
     DEFAULT_CHINESE_SCRIPT,
   );
   const [source, setSource] = useState<AudioSource>("microphone");
+  const [audioDevices, setAudioDevices] = useState<AudioInputDevice[]>([]);
+  const [audioDeviceId, setAudioDeviceId] = useState("default");
   const [status, setStatus] = useState<SessionStatus>("idle");
   const [statusMessage, setStatusMessage] = useState("Ready to translate");
   const [outputTranscript, setOutputTranscript] = useState("");
   const [inputTranscript, setInputTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [muted, setMuted] = useState(false);
+  const [translationEnabled, setTranslationEnabled] = useState(true);
   const [volume, setVolume] = useState(1);
-  const [sourceVolume, setSourceVolume] = useState(0);
+  const [originalEnabled, setOriginalEnabled] = useState(false);
+  const [sourceVolume, setSourceVolume] = useState(1);
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
   const [livePanelCollapsed, setLivePanelCollapsed] = useState(false);
   const [sourcePanelCollapsed, setSourcePanelCollapsed] = useState(false);
@@ -48,17 +57,40 @@ export default function TranslatorApp() {
   const isRunning =
     status === "connecting" || status === "live" || status === "reconnecting";
   const showChineseScript = targetLanguage === "zh";
+  const selectedMicLabel =
+    audioDevices.find((device) => device.deviceId === audioDeviceId)?.label ??
+    "Microphone";
 
   const controlsSummary = [
     OUTPUT_LANGUAGES.find((language) => language.code === targetLanguage)
       ?.label ?? targetLanguage,
-    source === "microphone" ? "Microphone" : "Browser tab",
+    source === "microphone" ? selectedMicLabel : "Browser tab",
     showChineseScript
       ? CHINESE_SCRIPTS.find((script) => script.id === chineseScript)?.label
       : null,
   ]
     .filter(Boolean)
     .join(" · ");
+
+  const refreshAudioDevices = useCallback(async () => {
+    try {
+      await ensureMicrophonePermission();
+      const devices = await listAudioInputDevices();
+      setAudioDevices(devices);
+      setAudioDeviceId((current) =>
+        devices.some((device) => device.deviceId === current)
+          ? current
+          : (devices[0]?.deviceId ?? "default"),
+      );
+    } catch (deviceError) {
+      setAudioDevices([]);
+      setError(
+        deviceError instanceof Error
+          ? deviceError.message
+          : "Could not list audio input devices.",
+      );
+    }
+  }, []);
 
   useEffect(() => {
     chineseScriptRef.current = chineseScript;
@@ -72,16 +104,44 @@ export default function TranslatorApp() {
   }, []);
 
   useEffect(() => {
+    if (source !== "microphone") return;
+
+    // Defer so the effect only subscribes; device list updates from the timer /
+    // devicechange callbacks (avoids synchronous setState-in-effect).
+    const timer = window.setTimeout(() => {
+      void refreshAudioDevices();
+    }, 0);
+
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.addEventListener) {
+      return () => {
+        window.clearTimeout(timer);
+      };
+    }
+
+    const onDeviceChange = () => {
+      void refreshAudioDevices();
+    };
+    mediaDevices.addEventListener("devicechange", onDeviceChange);
+    return () => {
+      window.clearTimeout(timer);
+      mediaDevices.removeEventListener("devicechange", onDeviceChange);
+    };
+  }, [source, refreshAudioDevices]);
+
+  useEffect(() => {
     sessionRef.current?.setTranslatedVolume(volume);
   }, [volume]);
 
   useEffect(() => {
-    sessionRef.current?.setTranslatedMuted(muted);
-  }, [muted]);
+    sessionRef.current?.setTranslatedMuted(!translationEnabled);
+  }, [translationEnabled]);
 
   useEffect(() => {
-    sessionRef.current?.setSourceVolume(sourceVolume);
-  }, [sourceVolume]);
+    sessionRef.current?.setSourceVolume(
+      originalEnabled ? sourceVolume : 0,
+    );
+  }, [originalEnabled, sourceVolume]);
 
   // Re-render captions when the user toggles script mid-session.
   useEffect(() => {
@@ -124,6 +184,7 @@ export default function TranslatorApp() {
     const session = new TranslationSession({
       targetLanguage,
       source,
+      audioDeviceId: source === "microphone" ? audioDeviceId : undefined,
       audioElement: audioRef.current,
       callbacks: {
         onStatus: (next, message) => {
@@ -144,8 +205,8 @@ export default function TranslatorApp() {
 
     sessionRef.current = session;
     session.setTranslatedVolume(volume);
-    session.setTranslatedMuted(muted);
-    session.setSourceVolume(sourceVolume);
+    session.setTranslatedMuted(!translationEnabled);
+    session.setSourceVolume(originalEnabled ? sourceVolume : 0);
 
     try {
       await session.start();
@@ -165,8 +226,7 @@ export default function TranslatorApp() {
 
       <main className="stage">
         <header className="brand-block">
-          <p className="brand">EchoLine</p>
-          <h1 className="headline">Speak once. Hear it in another language.</h1>
+          <h1 className="brand">EchoLine</h1>
         </header>
 
         <section
@@ -259,9 +319,12 @@ export default function TranslatorApp() {
                     name="source"
                     value="microphone"
                     checked={source === "microphone"}
-                    onChange={() => setSource("microphone")}
+                    onChange={() => {
+                      setSource("microphone");
+                      void refreshAudioDevices();
+                    }}
                   />
-                  Microphone
+                  Microphone / virtual input
                 </label>
                 <label>
                   <input
@@ -274,6 +337,30 @@ export default function TranslatorApp() {
                   Browser tab
                 </label>
               </fieldset>
+
+              {source === "microphone" ? (
+                <label className="field">
+                  <span>Input device</span>
+                  <select
+                    value={audioDeviceId}
+                    disabled={isRunning || audioDevices.length === 0}
+                    onFocus={() => {
+                      void refreshAudioDevices();
+                    }}
+                    onChange={(event) => setAudioDeviceId(event.target.value)}
+                  >
+                    {audioDevices.length === 0 ? (
+                      <option value="default">Requesting microphone access…</option>
+                    ) : (
+                      audioDevices.map((device) => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {formatAudioInputLabel(device)}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+              ) : null}
 
               <div className="actions">
                 {!isRunning ? (
@@ -349,47 +436,33 @@ export default function TranslatorApp() {
               {error ? <p className="error-banner">{error}</p> : null}
 
               <div className="playback">
-                <label className="inline-control">
-                  <input
-                    type="checkbox"
-                    checked={muted}
-                    onChange={(event) => setMuted(event.target.checked)}
-                  />
-                  Mute translation
-                </label>
-                <label className="inline-control grow">
-                  <span>Volume</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={muted ? 0 : volume}
-                    aria-valuenow={muted ? 0 : volume}
-                    onChange={(event) => {
-                      const next = Number(event.target.value);
-                      setVolume(next);
-                      if (muted && next > 0) {
-                        setMuted(false);
+                <div className="playback-row">
+                  <label className="inline-control playback-label">
+                    <input
+                      type="checkbox"
+                      checked={translationEnabled}
+                      onChange={(event) =>
+                        setTranslationEnabled(event.target.checked)
                       }
-                    }}
-                  />
-                </label>
-                {source === "tab" ? (
-                  <label className="inline-control grow">
-                    <span>Original</span>
+                    />
+                    Audio
+                  </label>
+                  <label className="inline-control playback-slider">
+                    <span className="sr-only">Translated speech volume</span>
                     <input
                       type="range"
                       min={0}
                       max={1}
                       step={0.05}
-                      value={sourceVolume}
+                      value={translationEnabled ? volume : 0}
+                      aria-valuenow={translationEnabled ? volume : 0}
+                      disabled={!translationEnabled}
                       onChange={(event) =>
-                        setSourceVolume(Number(event.target.value))
+                        setVolume(Number(event.target.value))
                       }
                     />
                   </label>
-                ) : null}
+                </div>
               </div>
 
               <div className="captions">
@@ -454,18 +527,50 @@ export default function TranslatorApp() {
           </div>
 
           {!sourcePanelCollapsed ? (
-            <div ref={inputCaptionRef} className="caption-scroll">
-              <p
-                className={`caption-body muted-body${
-                  inputTranscript ? " caption-live" : " caption-hint"
-                }`}
-              >
-                {inputTranscript ||
-                  (isRunning
-                    ? "Detecting source language…"
-                    : "Source transcript text will appear here once you start.")}
-              </p>
-            </div>
+            <>
+              <div className="playback">
+                <div className="playback-row">
+                  <label className="inline-control playback-label">
+                    <input
+                      type="checkbox"
+                      checked={originalEnabled}
+                      onChange={(event) =>
+                        setOriginalEnabled(event.target.checked)
+                      }
+                    />
+                    Audio
+                  </label>
+                  <label className="inline-control playback-slider">
+                    <span className="sr-only">Original speech volume</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={originalEnabled ? sourceVolume : 0}
+                      aria-valuenow={originalEnabled ? sourceVolume : 0}
+                      disabled={!originalEnabled}
+                      onChange={(event) =>
+                        setSourceVolume(Number(event.target.value))
+                      }
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div ref={inputCaptionRef} className="caption-scroll">
+                <p
+                  className={`caption-body muted-body${
+                    inputTranscript ? " caption-live" : " caption-hint"
+                  }`}
+                >
+                  {inputTranscript ||
+                    (isRunning
+                      ? "Detecting source language…"
+                      : "Source transcript text will appear here once you start.")}
+                </p>
+              </div>
+            </>
           ) : null}
         </section>
 

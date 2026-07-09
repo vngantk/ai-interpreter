@@ -1,17 +1,17 @@
 export const OUTPUT_LANGUAGES = [
+  { code: "zh", label: "Chinese" },
+  { code: "en", label: "English" },
   { code: "es", label: "Spanish" },
   { code: "pt", label: "Portuguese" },
   { code: "fr", label: "French" },
   { code: "ja", label: "Japanese" },
   { code: "ru", label: "Russian" },
-  { code: "zh", label: "Chinese" },
   { code: "de", label: "German" },
   { code: "ko", label: "Korean" },
   { code: "hi", label: "Hindi" },
   { code: "id", label: "Indonesian" },
   { code: "vi", label: "Vietnamese" },
   { code: "it", label: "Italian" },
-  { code: "en", label: "English" },
 ] as const;
 
 export type OutputLanguageCode = (typeof OUTPUT_LANGUAGES)[number]["code"];
