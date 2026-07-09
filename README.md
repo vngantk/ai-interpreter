@@ -57,12 +57,17 @@ The model auto-detects 70+ input languages. Spoken output is limited to these 13
 | `it` | Italian    |
 | `en` | English    |
 
+### Chinese caption script
+
+The API only accepts `zh` for Chinese (typically Simplified captions). When Chinese is selected, the UI offers **Traditional (繁體)** or **Simplified (简体)** for captions. Traditional display is converted in the browser with [OpenCC](https://github.com/BYVoid/OpenCC) (`cn` → `tw`). Spoken audio is unchanged.
+
 ## Usage tips
 
 - **Microphone**: speak into your mic; hear the translation and watch captions.
 - **Browser tab**: share a tab with audio enabled. Prefer Chrome. When supported, local tab playback is suppressed so you do not hear original + translation at once; use the **Original** slider if you want some source audio mixed in.
 - Changing the target language requires stopping and starting a new session (one session per output language).
 - Source transcripts use `gpt-realtime-whisper` when configured on the session.
+- For Chinese, toggle caption script anytime; Traditional is the default.
 
 ## Cost
 
@@ -73,6 +78,7 @@ Realtime Translation is billed by **audio duration** (not text tokens). Check cu
 - `app/api/session/route.ts` — mints translation client secrets
 - `app/api/debug/events/route.ts` — prints forwarded realtime model events to the server console
 - `lib/languages.ts` — supported output language codes
+- `lib/chinese-script.ts` — Simplified ↔ Traditional caption conversion (OpenCC)
 - `lib/translation-session.ts` — WebRTC capture, SDP negotiation, event handling
 - `components/TranslatorApp.tsx` — UI
 

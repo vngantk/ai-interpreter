@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  CHINESE_SCRIPTS,
+  DEFAULT_CHINESE_SCRIPT,
+  formatChineseCaption,
+  type ChineseScript,
+} from "@/lib/chinese-script";
+import {
   DEFAULT_TARGET_LANGUAGE,
   OUTPUT_LANGUAGES,
   type OutputLanguageCode,
@@ -15,9 +21,14 @@ import {
 export default function TranslatorApp() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sessionRef = useRef<TranslationSession | null>(null);
+  const chineseScriptRef = useRef<ChineseScript>(DEFAULT_CHINESE_SCRIPT);
+  const rawOutputRef = useRef("");
 
   const [targetLanguage, setTargetLanguage] = useState<OutputLanguageCode>(
     DEFAULT_TARGET_LANGUAGE,
+  );
+  const [chineseScript, setChineseScript] = useState<ChineseScript>(
+    DEFAULT_CHINESE_SCRIPT,
   );
   const [source, setSource] = useState<AudioSource>("microphone");
   const [status, setStatus] = useState<SessionStatus>("idle");
@@ -30,7 +41,13 @@ export default function TranslatorApp() {
   const [sourceVolume, setSourceVolume] = useState(0);
   const [showSourceTranscript, setShowSourceTranscript] = useState(true);
 
-  const isRunning = status === "connecting" || status === "live" || status === "reconnecting";
+  const isRunning =
+    status === "connecting" || status === "live" || status === "reconnecting";
+  const showChineseScript = targetLanguage === "zh";
+
+  useEffect(() => {
+    chineseScriptRef.current = chineseScript;
+  }, [chineseScript]);
 
   useEffect(() => {
     return () => {
@@ -51,10 +68,30 @@ export default function TranslatorApp() {
     sessionRef.current?.setSourceVolume(sourceVolume);
   }, [sourceVolume]);
 
+  // Re-render captions when the user toggles script mid-session.
+  useEffect(() => {
+    if (targetLanguage !== "zh") return;
+    setOutputTranscript(
+      formatChineseCaption(rawOutputRef.current, chineseScript),
+    );
+  }, [chineseScript, targetLanguage]);
+
+  function appendOutputDelta(delta: string) {
+    rawOutputRef.current += delta;
+    if (targetLanguage === "zh") {
+      setOutputTranscript(
+        formatChineseCaption(rawOutputRef.current, chineseScriptRef.current),
+      );
+      return;
+    }
+    setOutputTranscript((prev) => prev + delta);
+  }
+
   async function handleStart() {
     if (!audioRef.current || isRunning) return;
 
     setError(null);
+    rawOutputRef.current = "";
     setOutputTranscript("");
     setInputTranscript("");
 
@@ -68,7 +105,7 @@ export default function TranslatorApp() {
           if (message) setStatusMessage(message);
         },
         onOutputTranscript: (delta) => {
-          setOutputTranscript((prev) => prev + delta);
+          appendOutputDelta(delta);
         },
         onInputTranscript: (delta) => {
           setInputTranscript((prev) => prev + delta);
@@ -129,6 +166,24 @@ export default function TranslatorApp() {
             </select>
           </label>
 
+          {showChineseScript ? (
+            <label className="field">
+              <span>Chinese captions</span>
+              <select
+                value={chineseScript}
+                onChange={(event) =>
+                  setChineseScript(event.target.value as ChineseScript)
+                }
+              >
+                {CHINESE_SCRIPTS.map((script) => (
+                  <option key={script.id} value={script.id}>
+                    {script.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
           <fieldset className="source-toggle" disabled={isRunning}>
             <legend>Audio source</legend>
             <label>
@@ -173,6 +228,14 @@ export default function TranslatorApp() {
           </div>
 
           {error ? <p className="error-banner">{error}</p> : null}
+
+          {showChineseScript ? (
+            <p className="hint">
+              Chinese speech still uses the model&apos;s <code>zh</code> output.
+              Caption script is converted in the browser (OpenCC) and does not
+              change the spoken audio.
+            </p>
+          ) : null}
 
           <div className="playback">
             <label className="inline-control">
