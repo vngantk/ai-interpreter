@@ -18,7 +18,7 @@ export type OutputLanguageCode = (typeof OUTPUT_LANGUAGES)[number]["code"];
 
 const SUPPORTED = new Set<string>(OUTPUT_LANGUAGES.map((l) => l.code));
 
-export const DEFAULT_TARGET_LANGUAGE: OutputLanguageCode = "es";
+export const DEFAULT_TARGET_LANGUAGE: OutputLanguageCode = "zh";
 
 export function isOutputLanguageCode(value: string): value is OutputLanguageCode {
   return SUPPORTED.has(value);

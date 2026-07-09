@@ -29,12 +29,21 @@ export async function POST(request: Request) {
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
+    console.error("[session] OPENAI_API_KEY missing");
     return NextResponse.json(
       { error: "OPENAI_API_KEY is not configured on the server." },
       { status: 500 },
     );
   }
 
+  console.log("[session] minting client secret", {
+    model: "gpt-realtime-translate",
+    targetLanguage: language,
+    inputTranscription: "gpt-realtime-whisper",
+    noiseReduction: "near_field",
+  });
+
+  const startedAt = Date.now();
   const response = await fetch(TRANSLATION_CLIENT_SECRET_URL, {
     method: "POST",
     headers: {
@@ -57,12 +66,18 @@ export async function POST(request: Request) {
   });
 
   const payload = await response.json().catch(() => null);
+  const elapsedMs = Date.now() - startedAt;
 
   if (!response.ok) {
     const message =
       payload && typeof payload === "object" && "error" in payload
         ? JSON.stringify((payload as { error: unknown }).error)
         : `OpenAI request failed with status ${response.status}.`;
+    console.error("[session] client secret failed", {
+      status: response.status,
+      elapsedMs,
+      error: message,
+    });
     return NextResponse.json({ error: message }, { status: response.status });
   }
 
@@ -71,15 +86,34 @@ export async function POST(request: Request) {
     typeof payload !== "object" ||
     typeof (payload as { value?: unknown }).value !== "string"
   ) {
+    console.error("[session] unexpected OpenAI response shape", {
+      elapsedMs,
+      keys:
+        payload && typeof payload === "object"
+          ? Object.keys(payload as object)
+          : null,
+    });
     return NextResponse.json(
       { error: "OpenAI did not return a client secret value." },
       { status: 502 },
     );
   }
 
+  const expiresAt =
+    (payload as { expires_at?: number | null }).expires_at ?? null;
+  const sessionMeta = (payload as { session?: unknown }).session ?? null;
+
+  console.log("[session] client secret minted", {
+    targetLanguage: language,
+    elapsedMs,
+    expiresAt,
+    secretPrefix: `${(payload as { value: string }).value.slice(0, 8)}…`,
+    session: sessionMeta,
+  });
+
   return NextResponse.json({
     client_secret: (payload as { value: string }).value,
-    expires_at: (payload as { expires_at?: number | null }).expires_at ?? null,
+    expires_at: expiresAt,
     targetLanguage: language,
   });
 }
