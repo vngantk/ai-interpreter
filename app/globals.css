@@ -1,0 +1,360 @@
+@import "tailwindcss";
+
+:root {
+  --bg-deep: #0f1c17;
+  --bg-mid: #1a3329;
+  --bg-glow: #2f6b4f;
+  --ink: #f3f0e7;
+  --ink-soft: #c7c0b0;
+  --accent: #e2a35a;
+  --accent-strong: #f0b96f;
+  --danger: #d96b5c;
+  --live: #6fd3a0;
+  --panel: rgba(18, 32, 27, 0.72);
+  --line: rgba(243, 240, 231, 0.14);
+}
+
+@theme inline {
+  --color-background: var(--bg-deep);
+  --color-foreground: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--bg-deep);
+  font-family: var(--font-sans), "Avenir Next", sans-serif;
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.atmosphere {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 55% at 15% 10%, rgba(47, 107, 79, 0.55), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 90% 20%, rgba(226, 163, 90, 0.22), transparent 55%),
+    linear-gradient(160deg, var(--bg-deep), var(--bg-mid) 45%, #102019 100%);
+  animation: drift 18s ease-in-out infinite alternate;
+}
+
+@keyframes drift {
+  from {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.04) translate3d(-1.5%, 1%, 0);
+  }
+}
+
+.stage {
+  position: relative;
+  z-index: 1;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: clamp(2rem, 6vw, 4.5rem) clamp(1.25rem, 4vw, 2rem) 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  min-height: 100vh;
+  justify-content: center;
+}
+
+.brand-block {
+  animation: rise 700ms ease-out both;
+}
+
+.brand {
+  margin: 0 0 0.85rem;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(2.4rem, 7vw, 4rem);
+  font-weight: 560;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+  color: var(--ink);
+}
+
+.headline {
+  margin: 0;
+  max-width: 16ch;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.35rem, 3.4vw, 1.85rem);
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.lede {
+  margin: 0.85rem 0 0;
+  max-width: 38ch;
+  color: var(--ink-soft);
+  font-size: 1.02rem;
+  line-height: 1.55;
+}
+
+.controls,
+.live-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(14px);
+  padding: 1.15rem 1.2rem;
+  animation: rise 850ms ease-out both;
+}
+
+.controls {
+  display: grid;
+  gap: 1rem;
+  animation-delay: 80ms;
+}
+
+.live-panel {
+  display: grid;
+  gap: 1rem;
+  animation-delay: 140ms;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.field {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.field select {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  padding: 0.75rem 0.9rem;
+  border-radius: 0;
+}
+
+.source-toggle {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.25rem;
+  color: var(--ink-soft);
+}
+
+.source-toggle legend {
+  padding: 0;
+  margin-bottom: 0.45rem;
+  width: 100%;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.source-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.primary,
+.danger {
+  border: 0;
+  cursor: pointer;
+  padding: 0.85rem 1.25rem;
+  letter-spacing: 0.01em;
+  transition: transform 160ms ease, background 160ms ease, opacity 160ms ease;
+}
+
+.primary {
+  background: var(--accent);
+  color: #1a1208;
+}
+
+.primary:hover {
+  background: var(--accent-strong);
+  transform: translateY(-1px);
+}
+
+.danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid rgba(217, 107, 92, 0.55);
+}
+
+.danger:hover {
+  background: rgba(217, 107, 92, 0.12);
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.status-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--ink-soft);
+  flex-shrink: 0;
+}
+
+.status-dot.status-live {
+  background: var(--live);
+  box-shadow: 0 0 0 0 rgba(111, 211, 160, 0.55);
+  animation: pulse 1.6s ease-out infinite;
+}
+
+.status-dot.status-connecting,
+.status-dot.status-reconnecting {
+  background: var(--accent);
+}
+
+.status-dot.status-error {
+  background: var(--danger);
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(111, 211, 160, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(111, 211, 160, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(111, 211, 160, 0);
+  }
+}
+
+.status-text {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.error-banner {
+  margin: 0;
+  color: #ffd2cb;
+  background: rgba(217, 107, 92, 0.16);
+  border: 1px solid rgba(217, 107, 92, 0.35);
+  padding: 0.7rem 0.85rem;
+  font-size: 0.92rem;
+}
+
+.playback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.25rem;
+  align-items: center;
+}
+
+.inline-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.inline-control.grow {
+  flex: 1 1 160px;
+  min-width: 140px;
+}
+
+.inline-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.captions {
+  display: grid;
+  gap: 1rem;
+}
+
+.caption-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.caption-heading h2 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.caption-body {
+  margin: 0;
+  min-height: 4.5rem;
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.primary-caption .caption-body {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.15rem, 2.6vw, 1.4rem);
+  line-height: 1.45;
+}
+
+.muted-body {
+  color: var(--ink-soft);
+  font-size: 0.98rem;
+}
+
+@media (max-width: 640px) {
+  .stage {
+    justify-content: flex-start;
+    padding-top: 2rem;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .primary,
+  .danger {
+    width: 100%;
+  }
+}
