@@ -150,7 +150,7 @@ input {
 
 .controls-title,
 .panel-title {
-  /* font-size: 0.85rem; */
+  font-size: 1.1rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -160,11 +160,12 @@ input {
 .controls-summary,
 .panel-summary {
   color: var(--ink);
-  /* font-size: 0.95rem; */
+  font-size: 1rem;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-top: 0.5rem;
 }
 
 .controls-toggle,
@@ -211,7 +212,7 @@ input {
 .controls-stop {
   flex-shrink: 0;
   padding: 0.45rem 0.75rem;
-  /* font-size: 0.85rem; */
+  font-size: 1rem;
 }
 
 .live-panel {
@@ -241,7 +242,7 @@ input {
   display: grid;
   gap: 0.4rem;
   color: var(--ink-soft);
-  /* font-size: 0.85rem; */
+  font-size: 0.85rem;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -269,7 +270,7 @@ input {
   padding: 0;
   margin-bottom: 0.45rem;
   width: 100%;
-  /* font-size: 0.85rem; */
+  font-size: 0.85rem;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -277,6 +278,7 @@ input {
 .source-toggle label {
   display: inline-flex;
   align-items: center;
+  font-size: 0.85rem;
   gap: 0.45rem;
   cursor: pointer;
 }
@@ -366,7 +368,7 @@ input {
 
 .status-text {
   color: var(--ink-soft);
-  /* font-size: 0.95rem; */
+  font-size: 0.85rem;
 }
 
 .error-banner {
@@ -375,7 +377,7 @@ input {
   background: rgba(217, 107, 92, 0.16);
   border: 1px solid rgba(217, 107, 92, 0.35);
   padding: 0.7rem 0.85rem;
-  /* font-size: 0.95rem; */
+  font-size: 0.85rem;
 }
 
 .playback {
@@ -398,7 +400,7 @@ input {
   align-items: center;
   gap: 0.5rem;
   color: var(--ink-soft);
-  /* font-size: 0.95rem; */
+  font-size: 0.85rem;
   min-width: 0;
 }
 
@@ -448,7 +450,7 @@ input {
 
 .caption-heading h2 {
   margin: 0;
-  /* font-size: 0.85rem; */
+  font-size: 1.2rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -487,18 +489,18 @@ input {
   white-space: pre-wrap;
   line-height: 1.55;
   font-family: var(--font-sans), "Avenir Next", sans-serif;
-  /* font-size: 0.95rem; */
+  /* font-size: 1rem; */
   color: var(--ink-soft);
 }
 
 p.caption-body.caption-hint {
-  /* font-size: 0.85rem; */
+  font-size: 0.85rem;
   color: rgba(199, 192, 176, 0.62);
 }
 
 p.caption-body.caption-live,
 p.caption-body.muted-body.caption-live {
-  /* font-size: 1.25rem; */
+  font-size: 1.25rem;
   line-height: 1.65;
 }
 

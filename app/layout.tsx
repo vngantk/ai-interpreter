@@ -13,7 +13,7 @@ const sans = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "EchoLine — Realtime Translation",
+  title: "AI Interpreter",
   description:
     "One-way live speech translation in the browser using OpenAI gpt-realtime-translate.",
 };

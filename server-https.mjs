@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Production HTTPS server for EchoLine.
+ * Production HTTPS server for AI Interpreter.
  * Uses certs/dev-*.pem by default, or HTTPS_KEY / HTTPS_CERT env paths.
  */
 import { createServer } from "node:https";
@@ -38,5 +38,5 @@ createServer(
     handle(req, res, parsedUrl);
   },
 ).listen(port, hostname, () => {
-  console.log(`EchoLine HTTPS ready on https://${hostname}:${port}`);
+  console.log(`AI Interpreter HTTPS ready on https://${hostname}:${port}`);
 });

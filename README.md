@@ -1,4 +1,4 @@
-# EchoLine — Realtime One-Way Translation
+# AI Interpreter
 
 Browser web app that streams microphone or tab audio to OpenAI's `gpt-realtime-translate` over WebRTC and plays back translated speech with live captions.
 

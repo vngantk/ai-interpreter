@@ -102,7 +102,7 @@ x509_extensions = v3_req
 prompt = no
 
 [req_distinguished_name]
-CN = EchoLine Dev
+CN = AI Interpreter Dev
 
 [v3_req]
 keyUsage = digitalSignature, keyEncipherment

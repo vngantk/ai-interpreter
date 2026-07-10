@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "OpenAI-Safety-Identifier": "realtime-translate-local-dev",
+      "OpenAI-Safety-Identifier": "ai-interpreter-local-dev",
     },
     body: JSON.stringify({
       session: {

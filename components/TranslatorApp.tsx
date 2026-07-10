@@ -226,7 +226,7 @@ export default function TranslatorApp() {
 
       <main className="stage">
         <header className="brand-block">
-          <h1 className="brand">EchoLine</h1>
+          <h1 className="brand">AI Interpreter</h1>
         </header>
 
         <section
@@ -324,7 +324,7 @@ export default function TranslatorApp() {
                       void refreshAudioDevices();
                     }}
                   />
-                  Microphone / virtual input
+                  Microphone / Virtual input
                 </label>
                 <label>
                   <input
