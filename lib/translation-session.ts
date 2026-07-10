@@ -28,8 +28,6 @@ export type TranslationSessionOptions = {
   audioDeviceId?: string;
   audioElement: HTMLAudioElement;
   callbacks?: TranslationSessionCallbacks;
-  /** Optional id used when forwarding debug logs to the server. */
-  debugSessionId?: string;
 };
 
 type SessionResponse = {
@@ -47,36 +45,16 @@ export class TranslationSession {
   private translatedVolume = 1;
   private translatedMuted = false;
   private stopped = false;
-  private readonly debugSessionId: string;
 
-  constructor(private readonly options: TranslationSessionOptions) {
-    this.debugSessionId =
-      options.debugSessionId ??
-      `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-  }
+  constructor(private readonly options: TranslationSessionOptions) {}
 
   async start(): Promise<void> {
     const { callbacks } = this.options;
-    this.logServer("lifecycle", {
-      type: "client.session.starting",
-      source: this.options.source,
-      audioDeviceId: this.options.audioDeviceId ?? "default",
-      targetLanguage: this.options.targetLanguage,
-    });
     callbacks?.onStatus?.("connecting", "Requesting audio access…");
 
     try {
       this.captureStream = await this.captureAudio();
       this.wireCaptureEnded();
-      const trackLabel =
-        this.captureStream.getAudioTracks()[0]?.label ?? "unknown";
-      this.logServer("lifecycle", {
-        type: "client.audio.captured",
-        source: this.options.source,
-        audioDeviceId: this.options.audioDeviceId ?? "default",
-        trackLabel,
-        audioTracks: this.captureStream.getAudioTracks().length,
-      });
 
       // Local monitor for tab audio and mic/virtual inputs (volume starts at 0).
       this.startLocalSourcePlayback(this.captureStream);
@@ -92,17 +70,9 @@ export class TranslationSession {
         return;
       }
 
-      this.logServer("lifecycle", {
-        type: "client.session.live",
-        targetLanguage: session.targetLanguage,
-      });
       callbacks?.onStatus?.("live", "Listening and translating…");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logServer("lifecycle", {
-        type: "client.session.error",
-        error: message,
-      });
       callbacks?.onError?.(message);
       callbacks?.onStatus?.("error", message);
       this.cleanup();
@@ -112,7 +82,6 @@ export class TranslationSession {
 
   stop(): void {
     this.stopped = true;
-    this.logServer("lifecycle", { type: "client.session.stopped" });
     this.cleanup();
     this.options.callbacks?.onStatus?.("idle", "Stopped");
   }
@@ -275,10 +244,6 @@ export class TranslationSession {
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
-      this.logServer("webrtc", {
-        type: "client.webrtc.connection_state",
-        state,
-      });
       if (state === "failed") {
         this.options.callbacks?.onStatus?.(
           "error",
@@ -297,12 +262,7 @@ export class TranslationSession {
     const audio = this.options.audioElement;
     audio.autoplay = true;
     this.applyTranslatedPlayback();
-    pc.ontrack = ({ streams, track }) => {
-      this.logServer("webrtc", {
-        type: "client.webrtc.remote_track",
-        kind: track.kind,
-        id: track.id,
-      });
+    pc.ontrack = ({ streams }) => {
       audio.srcObject = streams[0];
       this.applyTranslatedPlayback();
       void audio.play().catch((error) => {
@@ -334,10 +294,6 @@ export class TranslationSession {
     }
 
     await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-    this.logServer("webrtc", {
-      type: "client.webrtc.sdp_answered",
-      answerBytes: answerSdp.length,
-    });
   }
 
   private handleRealtimeEvent(message: MessageEvent<string>): void {
@@ -345,14 +301,9 @@ export class TranslationSession {
     try {
       event = JSON.parse(message.data) as Record<string, unknown>;
     } catch {
-      this.logServer("model", {
-        type: "client.event.parse_error",
-        raw: String(message.data).slice(0, 200),
-      });
       return;
     }
 
-    this.logServer("model", event);
     this.options.callbacks?.onRealtimeEvent?.(event);
 
     if (event.type === "error") {
@@ -378,22 +329,6 @@ export class TranslationSession {
     ) {
       this.options.callbacks?.onInputTranscript?.(event.delta);
     }
-  }
-
-  private logServer(source: string, event: Record<string, unknown>): void {
-    // Fire-and-forget; never block the realtime path on logging.
-    void fetch("/api/debug/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: this.debugSessionId,
-        source,
-        event,
-      }),
-      keepalive: true,
-    }).catch(() => {
-      // ignore logging failures
-    });
   }
 
   private cleanup(): void {

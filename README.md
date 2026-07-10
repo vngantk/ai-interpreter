@@ -109,7 +109,6 @@ Realtime Translation is billed by **audio duration** (not text tokens). Check cu
 ## Project layout
 
 - `app/api/session/route.ts` — mints translation client secrets
-- `app/api/debug/events/route.ts` — prints forwarded realtime model events to the server console
 - `lib/languages.ts` — supported output language codes (default `zh`)
 - `lib/chinese-script.ts` — Simplified ↔ Traditional caption conversion (OpenCC)
 - `lib/audio-devices.ts` — enumerate microphone / virtual input devices
@@ -117,8 +116,6 @@ Realtime Translation is billed by **audio duration** (not text tokens). Check cu
 - `components/TranslatorApp.tsx` — UI
 - `scripts/generate-dev-certs.mjs` — local/LAN HTTPS cert generation
 - `server-https.mjs` — production HTTPS server
-
-While a session is live, watch the Next.js terminal for lines like `[session] …` and `[realtime][sess_…][model] session.output_transcript.delta …`.
 
 ## Notes
 
