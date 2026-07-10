@@ -23,6 +23,8 @@
 # misc
 .DS_Store
 *.pem
+/certs/*
+!/certs/.gitkeep
 
 # debug
 npm-debug.log*

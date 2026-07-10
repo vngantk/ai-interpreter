@@ -26,7 +26,26 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+`npm run dev` serves **HTTPS** on all interfaces (`0.0.0.0`) so other machines on your LAN can open the app. It auto-generates a self-signed cert in `certs/` (localhost + detected LAN IPs).
+
+Open [https://localhost:3000](https://localhost:3000). From another device, use `https://<your-lan-ip>:3000`.
+
+Browsers will warn about the self-signed certificate — accept/continue once per device. That secure context is required for microphone and tab audio capture off `localhost`.
+
+If your LAN IP changes (or wasn’t detected), regenerate:
+
+```bash
+HTTPS_EXTRA_HOSTS=192.168.1.50 npm run certs
+```
+
+Then restart `npm run dev` so both the TLS cert and `allowedDevOrigins` (needed for Fast Refresh / HMR WebSockets) pick up the new IP.
+
+Useful scripts:
+
+| Script | Purpose |
+|--------|---------|
+| `npm run certs` | Regenerate TLS certs (e.g. after your LAN IP changes) |
+| `npm run build && npm run start:https` | Production build over HTTPS (same `certs/` or `HTTPS_KEY` / `HTTPS_CERT`) |
 
 ## How it works
 
