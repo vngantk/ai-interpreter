@@ -38,6 +38,8 @@ const allowedDevOrigins = [
     ...hostsFromCertFile(),
     ...localIpv4Addresses(),
     "*.local",
+    // Cloudflare quick tunnels (`cloudflared tunnel --url …`)
+    "*.trycloudflare.com",
   ]),
 ].filter((host) => host !== "localhost" && host !== "127.0.0.1" && host !== "::1");
 

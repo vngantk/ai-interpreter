@@ -40,6 +40,18 @@ HTTPS_EXTRA_HOSTS=192.168.1.50 npm run certs
 
 Then restart `npm run dev` so both the TLS cert and `allowedDevOrigins` (needed for Fast Refresh / HMR WebSockets) pick up the new IP.
 
+### Share over the internet (Cloudflare Tunnel)
+
+With `npm run dev` already running, expose the app with a [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/):
+
+```bash
+cloudflared tunnel --url https://127.0.0.1:3000 --no-tls-verify --protocol http2
+```
+
+`cloudflared` prints a public `https://….trycloudflare.com` URL. `--no-tls-verify` is required because the local cert is self-signed. The URL changes each time you restart the tunnel; anyone with it can reach your local app (and use your server-side API key), so treat it as temporary.
+
+Install `cloudflared` from [Cloudflare’s downloads](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/) if it isn’t on your PATH yet.
+
 Useful scripts:
 
 | Script | Purpose |
