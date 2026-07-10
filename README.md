@@ -58,32 +58,34 @@ This uses the dedicated **translation** endpoint (`/v1/realtime/translations`), 
 
 ## Supported output languages
 
-The model auto-detects 70+ input languages. Spoken output is limited to these 13 codes:
+The model auto-detects 70+ input languages. Spoken output is limited to these 13 codes (default: Chinese):
 
 | Code | Language   |
 |------|------------|
+| `zh` | Chinese    |
+| `en` | English    |
 | `es` | Spanish    |
 | `pt` | Portuguese |
 | `fr` | French     |
 | `ja` | Japanese   |
 | `ru` | Russian    |
-| `zh` | Chinese    |
 | `de` | German     |
 | `ko` | Korean     |
 | `hi` | Hindi      |
 | `id` | Indonesian |
 | `vi` | Vietnamese |
 | `it` | Italian    |
-| `en` | English    |
 
 ### Chinese caption script
 
-The API only accepts `zh` for Chinese (typically Simplified captions). When Chinese is selected, the UI offers **Traditional (繁體)** or **Simplified (简体)** for captions. Traditional display is converted in the browser with [OpenCC](https://github.com/BYVoid/OpenCC) (`cn` → `tw`). Spoken audio is unchanged.
+The API only accepts `zh` for Chinese (typically Simplified captions). When Chinese is selected, the UI offers **Traditional (繁體)** or **Simplified (简体)** for captions. Traditional display is converted in the browser with [OpenCC](https://github.com/BYVoid/OpenCC) (`cn` → `tw`). Spoken audio is unchanged. Traditional is the default.
 
 ## Usage tips
 
-- **Microphone / virtual input**: choose any audio input device the browser exposes, including virtual mics such as BlackHole or Loopback. Route another app’s output into that virtual device in your OS, then select it here. Enable **Audio volume** in Source transcript to monitor the captured input (keep volume low with a real mic to avoid feedback).
-- **Browser tab**: share a tab with audio enabled. Prefer Chrome. When supported, local tab playback is suppressed so you do not hear original + translation at once; enable **Audio volume** in Source transcript if you want some source audio mixed in.
+- **Microphone / Virtual input**: choose any audio input device the browser exposes, including virtual mics such as BlackHole or Loopback. Route another app’s output into that virtual device in your OS, then select it here. Enable **Audio** under Source transcript to monitor the captured input (keep volume low with a real mic to avoid feedback).
+- **Browser tab**: share a tab with audio enabled. Prefer Chrome. When supported, local tab playback is suppressed so you do not hear original + translation at once; enable **Audio** under Source transcript if you want some source audio mixed in.
+- **Translated captions** and **Source transcript** each have an independent **Audio** toggle and volume slider.
+- Panels (controls, translated captions, source transcript) can be collapsed to free up space while a session is running.
 - Changing the target language requires stopping and starting a new session (one session per output language).
 - Source transcripts use `gpt-realtime-whisper` when configured on the session.
 - For Chinese, toggle caption script anytime; Traditional is the default.
@@ -96,11 +98,13 @@ Realtime Translation is billed by **audio duration** (not text tokens). Check cu
 
 - `app/api/session/route.ts` — mints translation client secrets
 - `app/api/debug/events/route.ts` — prints forwarded realtime model events to the server console
-- `lib/languages.ts` — supported output language codes
+- `lib/languages.ts` — supported output language codes (default `zh`)
 - `lib/chinese-script.ts` — Simplified ↔ Traditional caption conversion (OpenCC)
 - `lib/audio-devices.ts` — enumerate microphone / virtual input devices
 - `lib/translation-session.ts` — WebRTC capture, SDP negotiation, event handling
 - `components/TranslatorApp.tsx` — UI
+- `scripts/generate-dev-certs.mjs` — local/LAN HTTPS cert generation
+- `server-https.mjs` — production HTTPS server
 
 While a session is live, watch the Next.js terminal for lines like `[session] …` and `[realtime][sess_…][model] session.output_transcript.delta …`.
 
