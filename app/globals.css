@@ -71,11 +71,11 @@ input {
   z-index: 1;
   max-width: 720px;
   margin: 0 auto;
-  padding: 1.5rem clamp(1.25rem, 4vw, 2rem) 3rem;
+  padding: clamp(0.5rem, 2vw, 2rem);
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 1.75rem;
+  gap: 1.5rem;
   min-height: 0;
   justify-content: flex-start;
 }
@@ -150,7 +150,7 @@ input {
 
 .controls-title,
 .panel-title {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -489,7 +489,6 @@ input {
   white-space: pre-wrap;
   line-height: 1.55;
   font-family: var(--font-sans), "Avenir Next", sans-serif;
-  /* font-size: 1rem; */
   color: var(--ink-soft);
 }
 
@@ -523,10 +522,5 @@ p.caption-body.muted-body.caption-live {
 
   .actions {
     flex-direction: column;
-  }
-
-  .primary,
-  .danger {
-    width: 100%;
   }
 }
