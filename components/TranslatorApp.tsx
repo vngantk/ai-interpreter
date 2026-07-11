@@ -329,6 +329,7 @@ export default function TranslatorApp() {
     setOutputTranscript("");
     setInputTranscript("");
     setControlsCollapsed(true);
+    setLivePanelCollapsed(false);
 
     const session = new TranslationSession({
       targetLanguage,
@@ -423,7 +424,7 @@ export default function TranslatorApp() {
         className="panel-toggle panel-pip-toggle"
         aria-pressed={options.active}
         aria-label={options.active ? options.closeLabel : options.openLabel}
-        title={options.active ? "Return to main window" : "Pop out"}
+        title={options.active ? "Return to main window" : "Pop out (always-on-top in Chrome/Edge)"}
         onClick={() => {
           if (options.active) {
             options.onClose();

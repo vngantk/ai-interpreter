@@ -73,12 +73,21 @@ export function copyStylesToPipWindow(pipWindow: Window): void {
   }
 }
 
-function openPopupFallback(
+function waitForWindowLoad(win: Window): Promise<void> {
+  if (win.document.readyState === "complete") {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    win.addEventListener("load", () => resolve(), { once: true });
+  });
+}
+
+async function openPopupFallback(
   width: number,
   height: number,
   name: string,
   title: string,
-): Window {
+): Promise<Window> {
   const features = [
     "popup=yes",
     `width=${width}`,
@@ -86,13 +95,18 @@ function openPopupFallback(
     "noopener=no",
     "noreferrer=no",
   ].join(",");
-  const popup = window.open("", name, features);
+  // Same-origin page avoids the browser chrome showing "about:blank".
+  const url = `/popout?title=${encodeURIComponent(title)}`;
+  const popup = window.open(url, name, features);
   if (!popup) {
     throw new Error(
-      "Pop-out was blocked. Allow pop-ups for this site, or try Chrome/Edge for Picture-in-Picture.",
+      "Pop-out was blocked. Allow pop-ups for this site, or try Chrome/Edge for always-on-top Picture-in-Picture.",
     );
   }
+  await waitForWindowLoad(popup);
   popup.document.title = title;
+  // Replace the Next.js page shell with a clean host for the portal.
+  popup.document.body.replaceChildren();
   return popup;
 }
 
@@ -103,25 +117,44 @@ export interface CaptionPopoutOptions extends DocumentPictureInPictureOptions {
 }
 
 /**
- * Opens an always-on-top Document PiP window when available and free,
- * otherwise a regular popup window.
+ * Opens an always-on-top Document PiP window when the API is available
+ * (Chrome/Edge). Falls back to a same-origin popup otherwise.
+ *
+ * Note: browsers allow only one Document PiP window at a time. Opening
+ * another replaces the previous always-on-top window.
  */
 export async function openCaptionPopoutWindow(
   options: CaptionPopoutOptions,
 ): Promise<{ window: Window; mode: "pip" | "popup" }> {
   const width = options.width ?? 520;
   const height = options.height ?? 300;
-
-  // Document PiP only allows one window; leave it free for whichever opens first.
   const pipApi = window.documentPictureInPicture;
-  if (pipApi && !pipApi.window) {
-    const pipWindow = await pipApi.requestWindow({ width, height });
-    copyStylesToPipWindow(pipWindow);
-    pipWindow.document.title = options.title;
-    return { window: pipWindow, mode: "pip" };
+
+  if (pipApi) {
+    try {
+      const pipWindow = await pipApi.requestWindow({
+        width,
+        height,
+        preferInitialWindowPlacement:
+          options.preferInitialWindowPlacement ?? true,
+      });
+      // Set title before painting content so chrome doesn't linger on about:blank.
+      pipWindow.document.title = options.title;
+      copyStylesToPipWindow(pipWindow);
+      pipWindow.document.title = options.title;
+      return { window: pipWindow, mode: "pip" };
+    } catch {
+      // Fall through to popup (user gesture lost, permission, etc.).
+    }
   }
 
-  const popup = openPopupFallback(width, height, options.name, options.title);
+  const popup = await openPopupFallback(
+    width,
+    height,
+    options.name,
+    options.title,
+  );
   copyStylesToPipWindow(popup);
+  popup.document.title = options.title;
   return { window: popup, mode: "popup" };
 }
