@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ensureMicrophonePermission,
   formatAudioInputLabel,
@@ -13,6 +14,7 @@ import {
   formatChineseCaption,
   type ChineseScript,
 } from "@/lib/chinese-script";
+import { openCaptionPopoutWindow } from "@/lib/document-pip";
 import {
   DEFAULT_TARGET_LANGUAGE,
   OUTPUT_LANGUAGES,
@@ -24,6 +26,11 @@ import {
   type SessionStatus,
 } from "@/lib/translation-session";
 
+type PopoutConfig = {
+  name: string;
+  title: string;
+};
+
 export default function TranslatorApp() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sessionRef = useRef<TranslationSession | null>(null);
@@ -31,6 +38,11 @@ export default function TranslatorApp() {
   const rawOutputRef = useRef("");
   const outputCaptionRef = useRef<HTMLDivElement | null>(null);
   const inputCaptionRef = useRef<HTMLDivElement | null>(null);
+
+  const outputPipWindowRef = useRef<Window | null>(null);
+  const outputPipPollRef = useRef<number | null>(null);
+  const inputPipWindowRef = useRef<Window | null>(null);
+  const inputPipPollRef = useRef<number | null>(null);
 
   const [targetLanguage, setTargetLanguage] = useState<OutputLanguageCode>(
     DEFAULT_TARGET_LANGUAGE,
@@ -51,8 +63,12 @@ export default function TranslatorApp() {
   const [originalEnabled, setOriginalEnabled] = useState(false);
   const [sourceVolume, setSourceVolume] = useState(1);
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
-  const [livePanelCollapsed, setLivePanelCollapsed] = useState(false);
-  const [sourcePanelCollapsed, setSourcePanelCollapsed] = useState(false);
+  const [livePanelCollapsed, setLivePanelCollapsed] = useState(true);
+  const [sourcePanelCollapsed, setSourcePanelCollapsed] = useState(true);
+  const [outputPipContainer, setOutputPipContainer] =
+    useState<HTMLElement | null>(null);
+  const [inputPipContainer, setInputPipContainer] =
+    useState<HTMLElement | null>(null);
 
   const isRunning =
     status === "connecting" || status === "live" || status === "reconnecting";
@@ -60,6 +76,8 @@ export default function TranslatorApp() {
   const selectedMicLabel =
     audioDevices.find((device) => device.deviceId === audioDeviceId)?.label ??
     "Microphone";
+  const outputInPip = outputPipContainer !== null;
+  const inputInPip = inputPipContainer !== null;
 
   const controlsSummary = [
     OUTPUT_LANGUAGES.find((language) => language.code === targetLanguage)
@@ -96,12 +114,123 @@ export default function TranslatorApp() {
     chineseScriptRef.current = chineseScript;
   }, [chineseScript]);
 
+  const clearPipPoll = useCallback((pollRef: { current: number | null }) => {
+    if (pollRef.current !== null) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const closePopout = useCallback(
+    (
+      windowRef: { current: Window | null },
+      pollRef: { current: number | null },
+      setContainer: (value: HTMLElement | null) => void,
+    ) => {
+      clearPipPoll(pollRef);
+      const popout = windowRef.current;
+      windowRef.current = null;
+      setContainer(null);
+      if (popout && !popout.closed) {
+        popout.close();
+      }
+    },
+    [clearPipPoll],
+  );
+
+  const closeOutputPip = useCallback(() => {
+    closePopout(outputPipWindowRef, outputPipPollRef, setOutputPipContainer);
+  }, [closePopout]);
+
+  const closeInputPip = useCallback(() => {
+    closePopout(inputPipWindowRef, inputPipPollRef, setInputPipContainer);
+  }, [closePopout]);
+
+  const openPopout = useCallback(
+    async (
+      windowRef: { current: Window | null },
+      pollRef: { current: number | null },
+      setContainer: (value: HTMLElement | null) => void,
+      config: PopoutConfig,
+    ) => {
+      if (windowRef.current) return;
+
+      try {
+        setError(null);
+        const { window: popout, mode } = await openCaptionPopoutWindow({
+          width: 520,
+          height: 300,
+          name: config.name,
+          title: config.title,
+        });
+        windowRef.current = popout;
+
+        const container = popout.document.createElement("div");
+        container.className = "pip-caption-root";
+        popout.document.body.appendChild(container);
+        setContainer(container);
+
+        const onPageHide = () => {
+          popout.removeEventListener("pagehide", onPageHide);
+          if (windowRef.current === popout) {
+            clearPipPoll(pollRef);
+            windowRef.current = null;
+            setContainer(null);
+          }
+        };
+        popout.addEventListener("pagehide", onPageHide);
+
+        if (mode === "popup") {
+          pollRef.current = window.setInterval(() => {
+            if (windowRef.current?.closed) {
+              clearPipPoll(pollRef);
+              windowRef.current = null;
+              setContainer(null);
+            }
+          }, 500);
+        }
+      } catch (pipError) {
+        setError(
+          pipError instanceof Error
+            ? pipError.message
+            : "Could not open pop-out window.",
+        );
+      }
+    },
+    [clearPipPoll],
+  );
+
+  const openOutputPip = useCallback(() => {
+    void openPopout(
+      outputPipWindowRef,
+      outputPipPollRef,
+      setOutputPipContainer,
+      {
+        name: "ai-interpreter-translated-captions",
+        title: "Translated captions",
+      },
+    );
+  }, [openPopout]);
+
+  const openInputPip = useCallback(() => {
+    void openPopout(inputPipWindowRef, inputPipPollRef, setInputPipContainer, {
+      name: "ai-interpreter-source-transcript",
+      title: "Source transcript",
+    });
+  }, [openPopout]);
+
   useEffect(() => {
     return () => {
       sessionRef.current?.stop();
       sessionRef.current = null;
+      clearPipPoll(outputPipPollRef);
+      clearPipPoll(inputPipPollRef);
+      outputPipWindowRef.current?.close();
+      outputPipWindowRef.current = null;
+      inputPipWindowRef.current?.close();
+      inputPipWindowRef.current = null;
     };
-  }, []);
+  }, [clearPipPoll]);
 
   useEffect(() => {
     if (source !== "microphone") return;
@@ -153,13 +282,33 @@ export default function TranslatorApp() {
 
   useEffect(() => {
     const el = outputCaptionRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [outputTranscript]);
+    if (!el) return;
+
+    if (outputInPip) {
+      const pipDocument = el.ownerDocument;
+      const scroller =
+        pipDocument.scrollingElement ?? pipDocument.documentElement;
+      scroller.scrollTop = scroller.scrollHeight;
+      return;
+    }
+
+    el.scrollTop = el.scrollHeight;
+  }, [outputTranscript, outputInPip]);
 
   useEffect(() => {
     const el = inputCaptionRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [inputTranscript]);
+    if (!el) return;
+
+    if (inputInPip) {
+      const pipDocument = el.ownerDocument;
+      const scroller =
+        pipDocument.scrollingElement ?? pipDocument.documentElement;
+      scroller.scrollTop = scroller.scrollHeight;
+      return;
+    }
+
+    el.scrollTop = el.scrollHeight;
+  }, [inputTranscript, inputInPip]);
 
   function appendOutputDelta(delta: string) {
     rawOutputRef.current += delta;
@@ -218,6 +367,79 @@ export default function TranslatorApp() {
   function handleStop() {
     sessionRef.current?.stop();
     sessionRef.current = null;
+  }
+
+  function handleStartAgain() {
+    handleStop();
+    closeOutputPip();
+    closeInputPip();
+    rawOutputRef.current = "";
+    setOutputTranscript("");
+    setInputTranscript("");
+    setError(null);
+    setStatus("idle");
+    setStatusMessage("Ready to translate");
+    setControlsCollapsed(false);
+    setLivePanelCollapsed(true);
+    setSourcePanelCollapsed(true);
+  }
+
+  const outputCaptionBody = (
+    <p
+      className={`caption-body${
+        outputTranscript ? " caption-live" : " caption-hint"
+      }`}
+    >
+      {outputTranscript ||
+        (isRunning
+          ? "Waiting for speech…"
+          : "Translated captions will appear here once you start.")}
+    </p>
+  );
+
+  const inputCaptionBody = (
+    <p
+      className={`caption-body muted-body${
+        inputTranscript ? " caption-live" : " caption-hint"
+      }`}
+    >
+      {inputTranscript ||
+        (isRunning
+          ? "Detecting source language…"
+          : "Source transcript text will appear here once you start.")}
+    </p>
+  );
+
+  function renderPipToggle(options: {
+    active: boolean;
+    onOpen: () => void;
+    onClose: () => void;
+    openLabel: string;
+    closeLabel: string;
+  }) {
+    return (
+      <button
+        type="button"
+        className="panel-toggle panel-pip-toggle"
+        aria-pressed={options.active}
+        aria-label={options.active ? options.closeLabel : options.openLabel}
+        title={options.active ? "Return to main window" : "Pop out"}
+        onClick={() => {
+          if (options.active) {
+            options.onClose();
+          } else {
+            options.onOpen();
+          }
+        }}
+      >
+        <span
+          aria-hidden="true"
+          className={`panel-pip-icon${
+            options.active ? " panel-pip-icon-active" : ""
+          }`}
+        />
+      </button>
+    );
   }
 
   return (
@@ -380,6 +602,13 @@ export default function TranslatorApp() {
                     Stop
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="ghost actions-secondary"
+                  onClick={handleStartAgain}
+                >
+                  Clear & start again
+                </button>
               </div>
             </>
           ) : null}
@@ -399,7 +628,7 @@ export default function TranslatorApp() {
                 <span className={`status-dot status-${status}`} />
                 <span className="status-text">{statusMessage}</span>
               </div>
-              {livePanelCollapsed && outputTranscript ? (
+              {livePanelCollapsed && !outputInPip && outputTranscript ? (
                 <span className="panel-summary">
                   {outputTranscript.slice(0, 80)}
                   {outputTranscript.length > 80 ? "…" : ""}
@@ -407,6 +636,13 @@ export default function TranslatorApp() {
               ) : null}
             </div>
             <div className="panel-header-actions">
+              {renderPipToggle({
+                active: outputInPip,
+                onOpen: openOutputPip,
+                onClose: closeOutputPip,
+                openLabel: "Pop out translated captions",
+                closeLabel: "Return translated captions to main window",
+              })}
               <button
                 type="button"
                 className="panel-toggle"
@@ -467,22 +703,32 @@ export default function TranslatorApp() {
 
               <div className="captions">
                 <div className="caption-block primary-caption">
-                  <div ref={outputCaptionRef} className="caption-scroll">
-                    <p
-                      className={`caption-body${
-                        outputTranscript ? " caption-live" : " caption-hint"
-                      }`}
-                    >
-                      {outputTranscript ||
-                        (isRunning
-                          ? "Waiting for speech…"
-                          : "Translated captions will appear here once you start.")}
+                  {outputInPip ? (
+                    <p className="caption-pip-status">
+                      Live captions are open in a pop-out window.
                     </p>
-                  </div>
+                  ) : (
+                    <div ref={outputCaptionRef} className="caption-scroll">
+                      {outputCaptionBody}
+                    </div>
+                  )}
                 </div>
               </div>
             </>
           ) : null}
+          {outputInPip && outputPipContainer
+            ? createPortal(
+                <div className="pip-caption-frame">
+                  <div
+                    ref={outputCaptionRef}
+                    className="caption-scroll caption-scroll-pip"
+                  >
+                    {outputCaptionBody}
+                  </div>
+                </div>,
+                outputPipContainer,
+              )
+            : null}
         </section>
 
         <section
@@ -494,7 +740,7 @@ export default function TranslatorApp() {
           <div className="panel-header">
             <div className="panel-heading">
               <span className="panel-title">Source transcript</span>
-              {sourcePanelCollapsed && inputTranscript ? (
+              {sourcePanelCollapsed && !inputInPip && inputTranscript ? (
                 <span className="panel-summary">
                   {inputTranscript.slice(0, 80)}
                   {inputTranscript.length > 80 ? "…" : ""}
@@ -502,6 +748,13 @@ export default function TranslatorApp() {
               ) : null}
             </div>
             <div className="panel-header-actions">
+              {renderPipToggle({
+                active: inputInPip,
+                onOpen: openInputPip,
+                onClose: closeInputPip,
+                openLabel: "Pop out source transcript",
+                closeLabel: "Return source transcript to main window",
+              })}
               <button
                 type="button"
                 className="panel-toggle"
@@ -558,20 +811,30 @@ export default function TranslatorApp() {
                 </div>
               </div>
 
-              <div ref={inputCaptionRef} className="caption-scroll">
-                <p
-                  className={`caption-body muted-body${
-                    inputTranscript ? " caption-live" : " caption-hint"
-                  }`}
-                >
-                  {inputTranscript ||
-                    (isRunning
-                      ? "Detecting source language…"
-                      : "Source transcript text will appear here once you start.")}
+              {inputInPip ? (
+                <p className="caption-pip-status">
+                  Source transcript is open in a pop-out window.
                 </p>
-              </div>
+              ) : (
+                <div ref={inputCaptionRef} className="caption-scroll">
+                  {inputCaptionBody}
+                </div>
+              )}
             </>
           ) : null}
+          {inputInPip && inputPipContainer
+            ? createPortal(
+                <div className="pip-caption-frame">
+                  <div
+                    ref={inputCaptionRef}
+                    className="caption-scroll caption-scroll-pip"
+                  >
+                    {inputCaptionBody}
+                  </div>
+                </div>,
+                inputPipContainer,
+              )
+            : null}
         </section>
 
         <audio ref={audioRef} autoPlay playsInline hidden />

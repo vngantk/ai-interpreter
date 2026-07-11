@@ -285,11 +285,14 @@ input {
 
 .actions {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
 }
 
 .primary,
-.danger {
+.danger,
+.ghost {
   border: 0;
   cursor: pointer;
   padding: 0.65rem 1.25rem;
@@ -323,6 +326,19 @@ input {
 
 .danger:hover {
   background: rgba(217, 107, 92, 0.12);
+}
+
+.ghost {
+  margin-left: auto;
+  background: transparent;
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+}
+
+.ghost:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(243, 240, 231, 0.28);
 }
 
 .status-row {
@@ -440,6 +456,73 @@ input {
   gap: 1rem;
 }
 
+.panel-pip-icon {
+  position: relative;
+  width: 0.95rem;
+  height: 0.75rem;
+  border: 1.5px solid currentColor;
+  display: block;
+  opacity: 0.9;
+}
+
+.panel-pip-icon::after {
+  content: "";
+  position: absolute;
+  right: -0.05rem;
+  bottom: -0.05rem;
+  width: 0.48rem;
+  height: 0.38rem;
+  border: 1.5px solid currentColor;
+  background: rgba(18, 32, 27, 0.92);
+}
+
+.panel-pip-icon-active {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.caption-pip-status {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.pip-window-body {
+  margin: 0;
+  min-height: 100%;
+  height: 100%;
+  overflow: auto;
+  color: var(--ink);
+  background: var(--bg-deep);
+  font-family: var(--font-sans), "Avenir Next", sans-serif;
+}
+
+.pip-caption-root {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pip-caption-frame {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0.85rem 1rem;
+  background: var(--bg-deep);
+}
+
+.pip-caption-frame .caption-scroll-pip,
+.caption-scroll.caption-scroll-pip {
+  flex: none;
+  height: auto;
+  max-height: none;
+  min-height: 0;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
 .caption-heading {
   display: flex;
   align-items: center;
@@ -522,5 +605,10 @@ p.caption-body.muted-body.caption-live {
 
   .actions {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ghost {
+    margin-left: 0;
   }
 }
