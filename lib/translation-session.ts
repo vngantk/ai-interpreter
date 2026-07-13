@@ -1,34 +1,18 @@
-import type { OutputLanguageCode } from "@/lib/languages";
+import { captureAudioStream } from "@/lib/audio-capture";
+import type {
+  LiveTranslationSession,
+  TranslationSessionOptions,
+} from "@/lib/translation-types";
+
+export type {
+  AudioSource,
+  SessionStatus,
+  TranslationSessionCallbacks,
+  TranslationSessionOptions,
+} from "@/lib/translation-types";
 
 const TRANSLATION_CALL_URL =
   "https://api.openai.com/v1/realtime/translations/calls";
-
-export type AudioSource = "microphone" | "tab";
-
-export type SessionStatus =
-  | "idle"
-  | "connecting"
-  | "live"
-  | "error"
-  | "reconnecting";
-
-export type TranslationSessionCallbacks = {
-  onStatus?: (status: SessionStatus, message?: string) => void;
-  onOutputTranscript?: (delta: string) => void;
-  onInputTranscript?: (delta: string) => void;
-  onError?: (message: string) => void;
-  /** Raw realtime events from the oai-events data channel. */
-  onRealtimeEvent?: (event: Record<string, unknown>) => void;
-};
-
-export type TranslationSessionOptions = {
-  targetLanguage: OutputLanguageCode;
-  source: AudioSource;
-  /** Microphone / virtual input device id from enumerateDevices. */
-  audioDeviceId?: string;
-  audioElement: HTMLAudioElement;
-  callbacks?: TranslationSessionCallbacks;
-};
 
 type SessionResponse = {
   client_secret: string;
@@ -36,7 +20,7 @@ type SessionResponse = {
   error?: string;
 };
 
-export class TranslationSession {
+export class TranslationSession implements LiveTranslationSession {
   private peerConnection: RTCPeerConnection | null = null;
   private dataChannel: RTCDataChannel | null = null;
   private captureStream: MediaStream | null = null;
@@ -50,19 +34,25 @@ export class TranslationSession {
 
   async start(): Promise<void> {
     const { callbacks } = this.options;
-    callbacks?.onStatus?.("connecting", "Requesting audio access…");
+    callbacks?.onStatus?.("connecting", "OpenAI · Requesting audio access…");
 
     try {
-      this.captureStream = await this.captureAudio();
+      this.captureStream = await captureAudioStream({
+        source: this.options.source,
+        audioDeviceId: this.options.audioDeviceId,
+      });
       this.wireCaptureEnded();
 
       // Local monitor for tab audio and mic/virtual inputs (volume starts at 0).
       this.startLocalSourcePlayback(this.captureStream);
 
-      callbacks?.onStatus?.("connecting", "Creating translation session…");
+      callbacks?.onStatus?.(
+        "connecting",
+        "OpenAI · Creating translation session…",
+      );
       const session = await this.createSession();
 
-      callbacks?.onStatus?.("connecting", "Connecting WebRTC…");
+      callbacks?.onStatus?.("connecting", "OpenAI · Connecting WebRTC…");
       await this.connectWebRtc(session, this.captureStream);
 
       if (this.stopped) {
@@ -70,7 +60,7 @@ export class TranslationSession {
         return;
       }
 
-      callbacks?.onStatus?.("live", "Listening and translating…");
+      callbacks?.onStatus?.("live", "OpenAI · Listening and translating…");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       callbacks?.onError?.(message);
@@ -116,75 +106,6 @@ export class TranslationSession {
       throw new Error("Session response missing client secret.");
     }
     return body;
-  }
-
-  private async captureAudio(): Promise<MediaStream> {
-    if (this.options.source === "microphone") {
-      const deviceId = this.options.audioDeviceId?.trim();
-      const useSpecificDevice =
-        !!deviceId && deviceId !== "default" && deviceId !== "communications";
-
-      // Virtual loopback devices usually sound worse with processing on.
-      const processing = useSpecificDevice
-        ? {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          }
-        : {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          };
-
-      return navigator.mediaDevices.getUserMedia({
-        audio: useSpecificDevice
-          ? {
-              deviceId: { exact: deviceId },
-              ...processing,
-            }
-          : processing,
-      });
-    }
-
-    if (!navigator.mediaDevices?.getDisplayMedia) {
-      throw new Error("This browser does not support tab audio capture.");
-    }
-
-    const audioConstraints: MediaTrackConstraints & {
-      suppressLocalAudioPlayback?: boolean;
-    } = {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-    };
-
-    const supported = navigator.mediaDevices.getSupportedConstraints?.() as
-      | (MediaTrackSupportedConstraints & {
-          suppressLocalAudioPlayback?: boolean;
-        })
-      | undefined;
-    if (supported?.suppressLocalAudioPlayback) {
-      audioConstraints.suppressLocalAudioPlayback = true;
-    }
-
-    const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
-      audio: audioConstraints,
-    });
-
-    if (!stream.getAudioTracks().length) {
-      stream.getTracks().forEach((track) => track.stop());
-      throw new Error("Choose a browser tab and enable tab audio.");
-    }
-
-    // Video is only required to open the picker; drop it to save resources.
-    stream.getVideoTracks().forEach((track) => {
-      track.stop();
-      stream.removeTrack(track);
-    });
-
-    return stream;
   }
 
   private wireCaptureEnded(): void {
@@ -255,7 +176,10 @@ export class TranslationSession {
           "Connection interrupted…",
         );
       } else if (state === "connected" && !this.stopped) {
-        this.options.callbacks?.onStatus?.("live", "Listening and translating…");
+        this.options.callbacks?.onStatus?.(
+          "live",
+          "OpenAI · Listening and translating…",
+        );
       }
     };
 

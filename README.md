@@ -1,11 +1,17 @@
 # AI Interpreter
 
-Browser web app that streams microphone or tab audio to OpenAI's `gpt-realtime-translate` over WebRTC and plays back translated speech with live captions.
+Browser web app that streams microphone or tab audio for one-way live speech translation and plays back translated speech with live captions.
+
+Providers (toggle in the UI):
+
+- **OpenAI** — `gpt-realtime-translate` over WebRTC
+- **Gemini** — `gemini-3.5-live-translate-preview` over the Live API (WebSocket + PCM)
 
 ## Prerequisites
 
 - Node.js 20+ (18 may work; 21+ is fine)
-- An [OpenAI API key](https://platform.openai.com/api-keys) with access to Realtime Translation
+- An [OpenAI API key](https://platform.openai.com/api-keys) with access to Realtime Translation (for the OpenAI provider)
+- A [Gemini API key](https://aistudio.google.com/apikey) with access to Live Translate (for the Gemini provider)
 
 ## Setup
 
@@ -13,11 +19,14 @@ Browser web app that streams microphone or tab audio to OpenAI's `gpt-realtime-t
 cp .env.local.example .env.local
 ```
 
-Add your key to `.env.local`:
+Add keys to `.env.local`:
 
 ```bash
 OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=...
 ```
+
+`GOOGLE_API_KEY` is accepted as an alias for `GEMINI_API_KEY`.
 
 Install and run:
 
@@ -48,7 +57,7 @@ With `npm run dev` already running, expose the app with a [Cloudflare quick tunn
 cloudflared tunnel --url https://127.0.0.1:3000 --no-tls-verify --protocol http2
 ```
 
-`cloudflared` prints a public `https://….trycloudflare.com` URL. `--no-tls-verify` is required because the local cert is self-signed. The URL changes each time you restart the tunnel; anyone with it can reach your local app (and use your server-side API key), so treat it as temporary.
+`cloudflared` prints a public `https://….trycloudflare.com` URL. `--no-tls-verify` is required because the local cert is self-signed. The URL changes each time you restart the tunnel; anyone with it can reach your local app (and use your server-side API keys), so treat it as temporary.
 
 Install `cloudflared` from [Cloudflare’s downloads](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/) if it isn’t on your PATH yet.
 
@@ -61,64 +70,83 @@ Useful scripts:
 
 ## How it works
 
-1. The browser asks your Next.js API route (`POST /api/session`) for a short-lived client secret.
-2. The server calls `https://api.openai.com/v1/realtime/translations/client_secrets` with your API key — the key never reaches the browser.
-3. The browser captures mic or tab audio, opens an `RTCPeerConnection`, and posts an SDP offer to `https://api.openai.com/v1/realtime/translations/calls`.
+### OpenAI
+
+1. The browser asks `POST /api/session` for a short-lived client secret.
+2. The server calls OpenAI `…/realtime/translations/client_secrets` with your API key — the key never reaches the browser.
+3. The browser captures mic or tab audio, opens an `RTCPeerConnection`, and posts an SDP offer to `…/realtime/translations/calls`.
 4. Translated audio arrives as a remote WebRTC track; caption deltas arrive on the `oai-events` data channel.
 
-This uses the dedicated **translation** endpoint (`/v1/realtime/translations`), not the voice-agent Realtime session. There is no `response.create` turn loop — audio is translated continuously as it arrives.
+### Gemini
+
+1. The browser asks `POST /api/gemini/token` for a short-lived ephemeral token with translation config locked server-side.
+2. The server mints the token via the Gemini `v1alpha` Auth Tokens API using `GEMINI_API_KEY`.
+3. The browser opens a Live API WebSocket, streams 16 kHz PCM from the mic/tab, and plays 24 kHz PCM translated audio.
+4. Input/output transcriptions arrive on the same WebSocket for captions.
+
+Both paths are continuous speech→speech translation (not a turn-based voice agent).
 
 ## Supported output languages
 
-The model auto-detects 70+ input languages. Spoken output is limited to these 13 codes (default: Chinese):
+Both providers auto-detect many input languages. This UI exposes the same 13 output codes (default: Chinese) for A/B comparison:
 
-| Code | Language   |
-|------|------------|
-| `zh` | Chinese    |
-| `en` | English    |
-| `es` | Spanish    |
-| `pt` | Portuguese |
-| `fr` | French     |
-| `ja` | Japanese   |
-| `ru` | Russian    |
-| `de` | German     |
-| `ko` | Korean     |
-| `hi` | Hindi      |
-| `id` | Indonesian |
-| `vi` | Vietnamese |
-| `it` | Italian    |
+| Code | Language   | OpenAI | Gemini |
+|------|------------|--------|--------|
+| `zh` | Chinese    | `zh`   | `zh-Hans` / `zh-Hant` |
+| `en` | English    | yes    | yes |
+| `es` | Spanish    | yes    | yes |
+| `pt` | Portuguese | yes    | `pt-BR` |
+| `fr` | French     | yes    | yes |
+| `ja` | Japanese   | yes    | yes |
+| `ru` | Russian    | yes    | yes |
+| `de` | German     | yes    | yes |
+| `ko` | Korean     | yes    | yes |
+| `hi` | Hindi      | yes    | yes |
+| `id` | Indonesian | yes    | yes |
+| `vi` | Vietnamese | yes    | yes |
+| `it` | Italian    | yes    | yes |
 
-### Chinese caption script
+Gemini Live Translate supports 70+ languages in the API; this branch keeps the shared list for parity. Cantonese is **not** in Gemini’s published Live Translate language table.
 
-The API only accepts `zh` for Chinese (typically Simplified captions). When Chinese is selected, the UI offers **Traditional (繁體)** or **Simplified (简体)** for captions. Traditional display is converted in the browser with [OpenCC](https://github.com/BYVoid/OpenCC) (`cn` → `tw`). Spoken audio is unchanged. Traditional is the default.
+### Chinese script
+
+- **OpenAI**: API accepts `zh` only. The UI Traditional/Simplified control converts captions in the browser with [OpenCC](https://github.com/BYVoid/OpenCC). Spoken audio is unchanged.
+- **Gemini**: Traditional/Simplified selects `zh-Hant` vs `zh-Hans` for spoken output (and captions). Changing script requires a new session.
+
+Traditional is the default.
 
 ## Usage tips
 
-- **Microphone / Virtual input**: choose any audio input device the browser exposes, including virtual mics such as BlackHole or Loopback. Route another app’s output into that virtual device in your OS, then select it here. Enable **Audio** under Source transcript to monitor the captured input (keep volume low with a real mic to avoid feedback).
-- **Browser tab**: share a tab with audio enabled. Prefer Chrome. When supported, local tab playback is suppressed so you do not hear original + translation at once; enable **Audio** under Source transcript if you want some source audio mixed in.
+- Pick **OpenAI** or **Gemini** before starting; switch requires stop/start.
+- **Microphone / Virtual input**: choose any audio input device the browser exposes, including virtual mics such as BlackHole or Loopback.
+- **Browser tab**: share a tab with audio enabled. Prefer Chrome.
 - **Translated captions** and **Source transcript** each have an independent **Audio** toggle and volume slider.
-- Panels (controls, translated captions, source transcript) can be collapsed to free up space while a session is running.
-- Changing the target language requires stopping and starting a new session (one session per output language).
-- Source transcripts use `gpt-realtime-whisper` when configured on the session.
-- For Chinese, toggle caption script anytime; Traditional is the default.
+- Panels can be collapsed; caption panels can pop out (Document PiP when available).
+- Changing the target language requires stopping and starting a new session.
 
 ## Cost
 
-Realtime Translation is billed by **audio duration** (not text tokens). Check current pricing on the [OpenAI model page](https://developers.openai.com/api/docs/models/gpt-realtime-translate). Keep sessions short while developing.
+- **OpenAI** Realtime Translation is billed by **audio duration** (~$0.034/min). See the [model page](https://developers.openai.com/api/docs/models/gpt-realtime-translate).
+- **Gemini** Live Translate is billed by **audio tokens** (~$0.0368/min effective when input+output stream continuously). See [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing).
+
+Keep sessions short while developing.
 
 ## Project layout
 
-- `app/api/session/route.ts` — mints translation client secrets
-- `lib/languages.ts` — supported output language codes (default `zh`)
-- `lib/chinese-script.ts` — Simplified ↔ Traditional caption conversion (OpenCC)
-- `lib/audio-devices.ts` — enumerate microphone / virtual input devices
-- `lib/translation-session.ts` — WebRTC capture, SDP negotiation, event handling
+- `app/api/session/route.ts` — OpenAI client secrets
+- `app/api/gemini/token/route.ts` — Gemini ephemeral tokens
+- `lib/create-translation-session.ts` — provider factory
+- `lib/translation-session.ts` — OpenAI WebRTC session
+- `lib/gemini-translation-session.ts` — Gemini Live WebSocket session
+- `lib/languages.ts` — shared output language codes
+- `lib/gemini-languages.ts` — BCP-47 mapping for Gemini
 - `components/TranslatorApp.tsx` — UI
 - `scripts/generate-dev-certs.mjs` — local/LAN HTTPS cert generation
 - `server-https.mjs` — production HTTPS server
 
 ## Notes
 
-- Custom prompts, glossaries, and fixed voice selection are not supported by `gpt-realtime-translate` today.
-- Speech already in the selected output language may produce little or no translated audio (by design).
+- Custom prompts, glossaries, and fixed voice selection are limited by each provider’s Live Translate surface.
+- Speech already in the selected output language may produce little or no translated audio (OpenAI) or may be echoed when `echoTargetLanguage` is enabled (Gemini).
 - This app is one-way only; two-way conversation needs a second translation session in the reverse direction.
+- Gemini Live Translate is a preview model; behavior and pricing can change.

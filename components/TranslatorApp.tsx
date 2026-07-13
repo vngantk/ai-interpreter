@@ -15,16 +15,21 @@ import {
   type ChineseScript,
 } from "@/lib/chinese-script";
 import { openCaptionPopoutWindow } from "@/lib/document-pip";
+import { createTranslationSession } from "@/lib/create-translation-session";
 import {
   DEFAULT_TARGET_LANGUAGE,
   OUTPUT_LANGUAGES,
+  isLanguageSupportedByProvider,
+  languagesForProvider,
   type OutputLanguageCode,
 } from "@/lib/languages";
-import {
-  TranslationSession,
-  type AudioSource,
-  type SessionStatus,
-} from "@/lib/translation-session";
+import type {
+  AudioSource,
+  LiveTranslationSession,
+  SessionStatus,
+  TranslationProviderId,
+} from "@/lib/translation-types";
+import { TRANSLATION_PROVIDERS } from "@/lib/translation-types";
 
 type PopoutConfig = {
   name: string;
@@ -33,7 +38,7 @@ type PopoutConfig = {
 
 export default function TranslatorApp() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const sessionRef = useRef<TranslationSession | null>(null);
+  const sessionRef = useRef<LiveTranslationSession | null>(null);
   const chineseScriptRef = useRef<ChineseScript>(DEFAULT_CHINESE_SCRIPT);
   const rawOutputRef = useRef("");
   const outputCaptionRef = useRef<HTMLDivElement | null>(null);
@@ -44,6 +49,7 @@ export default function TranslatorApp() {
   const inputPipWindowRef = useRef<Window | null>(null);
   const inputPipPollRef = useRef<number | null>(null);
 
+  const [provider, setProvider] = useState<TranslationProviderId>("openai");
   const [targetLanguage, setTargetLanguage] = useState<OutputLanguageCode>(
     DEFAULT_TARGET_LANGUAGE,
   );
@@ -73,6 +79,7 @@ export default function TranslatorApp() {
   const isRunning =
     status === "connecting" || status === "live" || status === "reconnecting";
   const showChineseScript = targetLanguage === "zh";
+  const availableLanguages = languagesForProvider(provider);
   const selectedMicLabel =
     audioDevices.find((device) => device.deviceId === audioDeviceId)?.label ??
     "Microphone";
@@ -80,6 +87,8 @@ export default function TranslatorApp() {
   const inputInPip = inputPipContainer !== null;
 
   const controlsSummary = [
+    TRANSLATION_PROVIDERS.find((item) => item.id === provider)?.label ??
+      provider,
     OUTPUT_LANGUAGES.find((language) => language.code === targetLanguage)
       ?.label ?? targetLanguage,
     source === "microphone" ? selectedMicLabel : "Browser tab",
@@ -321,6 +330,17 @@ export default function TranslatorApp() {
     setOutputTranscript((prev) => prev + delta);
   }
 
+  function replaceOutputTranscript(text: string) {
+    rawOutputRef.current = text;
+    if (targetLanguage === "zh") {
+      setOutputTranscript(
+        formatChineseCaption(text, chineseScriptRef.current),
+      );
+      return;
+    }
+    setOutputTranscript(text);
+  }
+
   async function handleStart() {
     if (!audioRef.current || isRunning) return;
 
@@ -331,11 +351,12 @@ export default function TranslatorApp() {
     setControlsCollapsed(true);
     setLivePanelCollapsed(false);
 
-    const session = new TranslationSession({
+    const session = createTranslationSession(provider, {
       targetLanguage,
       source,
       audioDeviceId: source === "microphone" ? audioDeviceId : undefined,
       audioElement: audioRef.current,
+      chineseScript,
       callbacks: {
         onStatus: (next, message) => {
           setStatus(next);
@@ -346,6 +367,12 @@ export default function TranslatorApp() {
         },
         onInputTranscript: (delta) => {
           setInputTranscript((prev) => prev + delta);
+        },
+        onOutputTranscriptReplace: (text) => {
+          replaceOutputTranscript(text);
+        },
+        onInputTranscriptReplace: (text) => {
+          setInputTranscript(text);
         },
         onError: (message) => {
           setError(message);
@@ -499,6 +526,35 @@ export default function TranslatorApp() {
 
           {!controlsCollapsed ? (
             <>
+              <fieldset className="source-toggle" disabled={isRunning}>
+                <legend>Translation provider</legend>
+                {TRANSLATION_PROVIDERS.map((item) => (
+                  <label key={item.id}>
+                    <input
+                      type="radio"
+                      name="provider"
+                      value={item.id}
+                      checked={provider === item.id}
+                      onChange={() => {
+                        setProvider(item.id);
+                        if (
+                          !isLanguageSupportedByProvider(
+                            targetLanguage,
+                            item.id,
+                          )
+                        ) {
+                          setTargetLanguage(
+                            languagesForProvider(item.id)[0]?.code ??
+                              DEFAULT_TARGET_LANGUAGE,
+                          );
+                        }
+                      }}
+                    />
+                    {item.label}
+                  </label>
+                ))}
+              </fieldset>
+
               <label className="field">
                 <span>Translate into</span>
                 <select
@@ -508,7 +564,7 @@ export default function TranslatorApp() {
                     setTargetLanguage(event.target.value as OutputLanguageCode)
                   }
                 >
-                  {OUTPUT_LANGUAGES.map((language) => (
+                  {availableLanguages.map((language) => (
                     <option key={language.code} value={language.code}>
                       {language.label}
                     </option>
@@ -518,9 +574,14 @@ export default function TranslatorApp() {
 
               {showChineseScript ? (
                 <label className="field">
-                  <span>Chinese captions</span>
+                  <span>
+                    {provider === "gemini"
+                      ? "Chinese script"
+                      : "Chinese captions"}
+                  </span>
                   <select
                     value={chineseScript}
+                    disabled={isRunning && provider === "gemini"}
                     onChange={(event) =>
                       setChineseScript(event.target.value as ChineseScript)
                     }

@@ -15,7 +15,7 @@ const sans = Manrope({
 export const metadata: Metadata = {
   title: "AI Interpreter",
   description:
-    "One-way live speech translation in the browser using OpenAI gpt-realtime-translate.",
+    "One-way live speech translation in the browser using OpenAI or Gemini Live Translate.",
 };
 
 export default function RootLayout({
